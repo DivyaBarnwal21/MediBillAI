@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Activity, LayoutDashboard, FileText, Menu, X, Upload } from "lucide-react"
+import { Activity, LayoutDashboard, FileText, Menu, X, Upload, TrendingUp } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -11,6 +11,7 @@ import { ModeToggle } from "@/components/mode-toggle"
 const navItems = [
   { name: "Home", href: "/", icon: Activity },
   { name: "Upload", href: "/upload", icon: Upload },
+  { name: "Predict", href: "/predict", icon: TrendingUp },
   { name: "Results", href: "/results", icon: LayoutDashboard },
   { name: "Letter", href: "/letter", icon: FileText },
 ]
@@ -20,7 +21,7 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
+    <nav className="sticky top-0 z-50 w-full border-b glass-panel">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center gap-2">
