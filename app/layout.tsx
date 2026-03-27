@@ -41,8 +41,8 @@ export default function RootLayout({
             <div className="container mx-auto px-6">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-2 text-sm font-bold">
-                  <div className="h-7 w-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs">AI</div>
-                  MediBill <span className="text-blue-600">AI</span>
+                  <div className="h-7 w-7 rounded-lg bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-xs">AI</div>
+                  MediBill <span className="text-black dark:text-white">AI</span>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
                   Benchmarks based on CGHS/NPPA standards. For patient use only. © {new Date().getFullYear()} MediBill AI.
