@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -104,7 +104,7 @@ def get_benchmark(item_name: str) -> float | None:
 
 
 @app.post("/extract")
-async def extract_bill(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def extract_bill(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
     Accept a hospital bill image or PDF.
     Use Gemini Vision to extract patient info + every line item.
@@ -166,26 +166,31 @@ async def extract_bill(file: UploadFile = File(...), db: Session = Depends(get_d
 
     overcharge_percentage = round((total_overcharge / total_charged * 100), 1) if total_charged > 0 else 0.0
 
-    # ── Step 3: Save to PostgreSQL (Graceful fallback if DB is offline) ──
-    try:
-        db_bill = models.Bill(filename=file.filename)
-        db.add(db_bill)
-        db.commit()
-        db.refresh(db_bill)
+    overcharge_percentage = round((total_overcharge / total_charged * 100), 1) if total_charged > 0 else 0.0
 
-        for e_item in enriched_items:
-            db_item = models.Item(
-                bill_id=db_bill.id,
-                name=e_item["item"],
-                price=float(e_item["charged"]),
-                quantity=int(e_item["quantity"])
-            )
-            db.add(db_item)
-        db.commit()
-        print(f"[DB Success] Saved bill '{file.filename}' to PostgreSQL.")
-    except Exception as e:
-        print(f"[DB Error] Could not save extracted bill to Postgres: {str(e)}")
-        db.rollback()
+    # ── Step 3: Save to Database in Background ──
+    def save_to_db():
+        try:
+            db_bill = models.Bill(filename=file.filename)
+            db.add(db_bill)
+            db.commit()
+            db.refresh(db_bill)
+
+            for e_item in enriched_items:
+                db_item = models.Item(
+                    bill_id=db_bill.id,
+                    name=e_item["item"],
+                    price=float(e_item["charged"]),
+                    quantity=int(e_item["quantity"])
+                )
+                db.add(db_item)
+            db.commit()
+            print(f"[DB Success] Saved bill '{file.filename}' to background database.")
+        except Exception as e:
+            print(f"[DB Error] Could not save in background: {str(e)}")
+            db.rollback()
+
+    background_tasks.add_task(save_to_db)
 
     return {
         "source": "gemini_vision",

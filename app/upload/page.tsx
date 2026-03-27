@@ -155,7 +155,8 @@ export default function UploadPage() {
       for (let i = 0; i < ANALYSIS_STEPS.length; i++) {
         setAnalysisStep(i + 1)
         setAnalysisLabel(ANALYSIS_STEPS[i].label)
-        await new Promise(r => setTimeout(r, ANALYSIS_STEPS[i].delay ?? 600))
+        // Reduced delay for faster UI feel
+        await new Promise(r => setTimeout(r, (ANALYSIS_STEPS[i].delay ?? 600) / 2)) // Halved the delay
       }
     }
 

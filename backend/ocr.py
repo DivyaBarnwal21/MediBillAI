@@ -18,71 +18,65 @@ def _get_gemini_key():
 
 def extract_bill_data_with_gemini(file_bytes: bytes, mime_type: str) -> dict:
     """
-    Sends the bill image/PDF to Gemini Vision and gets back a structured JSON
-    containing patient info and all line items with prices.
-
-    Returns a dict with keys:
-        patient_name, hospital_name, bill_number, date, doctor_name, ward, items[]
-    Each item: { name, charged_price, quantity }
+    Structured medical bill extraction with high-speed fallback.
     """
+    import time
     import google.generativeai as genai
 
-    api_key = _get_gemini_key()
-    genai.configure(api_key=api_key)
+    genai.configure(api_key=_get_gemini_key())
 
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    MODEL_CANDIDATES = [
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash-latest",
+    ]
 
-    prompt = """You are an expert medical billing data extractor.
-
-Carefully analyze this hospital bill image and extract ALL information as a structured JSON object.
-
-Return ONLY valid JSON with this exact structure (no markdown, no explanation):
+    prompt = """Extract medical bill data into JSON:
 {
-  "patient_name": "Full patient name or 'Unknown'",
-  "hospital_name": "Full hospital/clinic name",
-  "bill_number": "Bill / invoice number or 'Unknown'",
-  "date": "Date of bill in DD-MM-YYYY format or 'Unknown'",
-  "doctor_name": "Attending doctor name or 'Unknown'",
-  "ward": "Ward/room type (e.g. Semi-Private, ICU) or 'Unknown'",
-  "items": [
-    {
-      "name": "Exact item/service name as written on bill",
-      "charged_price": 1500.0,
-      "quantity": 1,
-      "category": "One of: Diagnostics, Pharmacy, Surgery, Consultation, Room, ICU, Nursing, Radiology, Consumables, Transport, Other"
-    }
-  ]
+  "patient_name": "Name",
+  "hospital_name": "Hospital",
+  "bill_number": "ID",
+  "date": "DD-MM-YYYY",
+  "doctor_name": "Doctor",
+  "ward": "Ward type",
+  "items": [{"name": "Item", "charged_price": 0.0, "quantity": 1, "category": "Diagnostics|Pharmacy|Surgery|Consultation|Room|ICU|Nursing|Radiology|Consumables|Transport|Other"}]
 }
+Return ONLY JSON. No markdown."""
 
-Rules:
-- Extract EVERY line item from the bill, including drugs, tests, procedures, room rent, doctor fees, etc.
-- charged_price must be a number (float), per-unit price
-- quantity must be an integer (default 1 if not stated)
-- Do NOT include totals/subtotals as items
-- If a field is unclear or missing, use "Unknown" for strings or 0 for numbers
-- Return ONLY the JSON object, nothing else"""
-
-    # Encode file as base64 for inline upload
     b64_data = base64.b64encode(file_bytes).decode("utf-8")
+    inline_data = {"inline_data": {"mime_type": mime_type, "data": b64_data}}
+    last_error = None
 
-    response = model.generate_content([
-        prompt,
-        {
-            "inline_data": {
-                "mime_type": mime_type,
-                "data": b64_data,
-            }
-        }
-    ])
+    for i, model_name in enumerate(MODEL_CANDIDATES):
+        print(f"[Gemini] Trying {model_name}...")
+        model = genai.GenerativeModel(model_name)
+        
+        # Reduced retries for speed; prefer switching models over waiting
+        for attempt in range(2): 
+            try:
+                response = model.generate_content([prompt, inline_data])
+                if not response or not hasattr(response, 'text') or not response.text:
+                    break # try next model
 
-    raw = response.text.strip()
+                raw = response.text.strip()
+                raw = re.sub(r"^```(?:json)?\s*", "", raw)
+                raw = re.sub(r"\s*```$", "", raw)
+                return json.loads(raw)
 
-    # Strip markdown code fences if Gemini wrapped in ```json
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
+            except Exception as e:
+                last_error = e
+                err_msg = str(e).lower()
+                print(f"[Gemini] {model_name} error: {err_msg[:50]}")
+                
+                # If rate limited, switch model immediately unless it's the first attempt on the first model
+                if "429" in err_msg or "quota" in err_msg:
+                    if i == 0 and attempt == 0:
+                        time.sleep(2) # very brief pause for the fastest model
+                        continue
+                    break # immediately try the next model candidate
+                raise
 
-    data = json.loads(raw)
-    return data
+    raise RuntimeError(f"Extraction failed: {last_error}")
 
 
 def guess_mime_type(filename: str, content: bytes) -> str:
