@@ -160,19 +160,17 @@ export default function UploadPage() {
     }
 
     // Try real Gemini Vision extraction + animation in parallel
-    const [realResult] = await Promise.all([
+    const [result] = await Promise.all([
       callRealExtractAPI(file),
       animateSteps(),
     ])
 
-    let result: AnalysisResult
-    let usedRealAPI = false
-
-    if (realResult) {
-      result = realResult
-      usedRealAPI = true
-    } else {
-      result = await runMockAnalysis(() => { })
+    if (!result) {
+      setPhase("upload")
+      toast.error("Extraction Failed", {
+        description: "Could not extract data from the bill. Please ensure your Gemini API key is configured.",
+      })
+      return
     }
 
     setAnalysis(result)
@@ -180,19 +178,11 @@ export default function UploadPage() {
     setPhase("results")
 
     setTimeout(() => {
-      if (usedRealAPI) {
-        toast.success("Real Data Extracted!", {
-          description: `Found ${result.items.length} items · ₹${result.total_overcharge.toLocaleString("en-IN")} overcharged.`,
-          duration: 6000,
-          icon: <Sparkles className="h-5 w-5 text-blue-500" />,
-        })
-      } else {
-        toast.info("Demo Mode — Backend not running", {
-          description: "Start the FastAPI backend to use real Gemini Vision extraction.",
-          duration: 5000,
-          icon: <WifiOff className="h-4 w-4" />,
-        })
-      }
+      toast.success("Extraction Complete!", {
+        description: `Found ${result.items.length} items · ${result.overcharge_percentage}% variation detected.`,
+        duration: 6000,
+        icon: <Sparkles className="h-5 w-5 text-blue-500" />,
+      })
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
     }, 300)
   }
