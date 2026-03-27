@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MediBill AI | Hospital Bill Analysis",
+  title: "MediBill AI | Medical Bill Negotiator",
   description: "Detect hospital overcharges instantly using AI and generate legal complaint reports.",
 };
 
@@ -25,16 +26,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col bg-background font-sans">
-        <Navbar />
-        <main className="flex-1">{children}</main>
-        <Toaster />
-        <footer className="border-t py-8 text-center text-sm text-muted-foreground">
-          <div className="container mx-auto px-4">
-            <p>© {new Date().getFullYear()} MediBill AI. All rights reserved.</p>
-          </div>
-        </footer>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <Navbar />
+          <main className="flex-1">{children}</main>
+          <Toaster />
+          <footer className="border-t py-8 text-center text-sm text-muted-foreground">
+            <div className="container mx-auto px-4">
+              <p>© {new Date().getFullYear()} MediBill AI. All rights reserved.</p>
+            </div>
+          </footer>
+        </ThemeProvider>
       </body>
     </html>
   );

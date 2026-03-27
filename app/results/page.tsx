@@ -1,203 +1,122 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { motion } from "framer-motion"
-import { SummaryCards } from "@/components/SummaryCards"
-import { BillTable, BillItem } from "@/components/BillTable"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Download, FileText, Share2, CheckCircle2 } from "lucide-react"
-import { toast } from "sonner"
+import Link from "next/link"
+import { AlertCircle, FileText, ArrowLeft, ArrowRight, ArrowDownToLine, Receipt, FileSearch } from "lucide-react"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { generateReport, generateLegalLetter } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
+const mockData = [
+  { id: 1, item: "CBC Blood Test", charged: 1500, benchmark:  450, overcharge: 1050 },
+  { id: 2, item: "X-Ray Chest PA View", charged: 1200, benchmark: 250, overcharge:  950 },
+  { id: 3, item: "Paracetamol IV", charged:  800, benchmark: 120, overcharge:  680 },
+  { id: 4, item: "Doctor Consultation", charged: 2000, benchmark: 800, overcharge: 1200 },
+  { id: 5, item: "Room Rent (Semi-Private)", charged: 6000, benchmark: 3500, overcharge: 2500 }
+]
+
 export default function ResultsPage() {
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
-  const [analysis, setAnalysis] = useState<any>(null)
-  const [legalLetter, setLegalLetter] = useState<string | null>(null)
-
-  useEffect(() => {
-    const storedAnalysis = localStorage.getItem("billAnalysis")
-    if (storedAnalysis) {
-      setAnalysis(JSON.parse(storedAnalysis))
-    }
-  }, [])
-
-  if (!analysis) {
-    return (
-      <div className="container mx-auto px-6 py-24 text-center">
-        <h2 className="text-2xl font-bold mb-4">No analysis data found.</h2>
-        <Button onClick={() => window.location.href = "/analyze"}>Go to Analyze</Button>
-      </div>
-    )
-  }
-
-  const totalBill = analysis.total_bill
-  const totalOvercharge = analysis.total_overcharge
-  const percentageOvercharge = analysis.percent_overcharge
-  const items = analysis.items.map((item: any, index: number) => ({
-    id: index.toString(),
-    name: item.item_name,
-    chargedPrice: item.charged_price,
-    benchmarkPrice: item.benchmark_price,
-    difference: item.difference,
-    isOvercharged: item.is_overcharged
-  }))
-
-  const handleDownload = async () => {
-    setIsDownloading(true)
-    try {
-      const blob = await generateReport(analysis)
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = "MediBill_Analysis_Report.pdf"
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      toast.success("PDF Report downloaded successfully!")
-    } catch (error) {
-      toast.error("Failed to download report")
-    } finally {
-      setIsDownloading(false)
-    }
-  }
-
-  const handleLegalLetter = async () => {
-    setIsGenerating(true)
-    try {
-      const res = await generateLegalLetter(analysis)
-      setLegalLetter(res.letter)
-      toast.success("Legal letter generated!", {
-        description: "Review your letter below.",
-      })
-    } catch (error) {
-      toast.error("Failed to generate legal letter")
-    } finally {
-      setIsGenerating(false)
-    }
-  }
+  const totalCharged = mockData.reduce((acc, curr) => acc + curr.charged, 0)
+  const totalOvercharge = mockData.reduce((acc, curr) => acc + curr.overcharge, 0)
+  const overchargePercentage = Math.round((totalOvercharge / totalCharged) * 100)
 
   return (
-    <div className="container mx-auto px-6 py-12 lg:py-16 space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="container mx-auto px-4 py-12 max-w-5xl">
+      <div className="flex items-center gap-4 mb-8">
+        <Link href="/upload" className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "rounded-full")}>
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Analysis Results</h1>
-          <p className="text-muted-foreground text-sm">Report ID: MB-{Math.floor(Math.random() * 10000)} • Generated on {new Date().toLocaleDateString()}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={handleDownload} disabled={isDownloading} className="rounded-xl">
-            <Download className="mr-2 h-4 w-4" /> {isDownloading ? "Downloading..." : "Download Report"}
-          </Button>
-          <Button onClick={handleLegalLetter} disabled={isGenerating} className="rounded-xl shadow-lg shadow-primary/20">
-            <FileText className="mr-2 h-4 w-4" /> {isGenerating ? "Generating..." : "Generate Legal Letter"}
-          </Button>
+          <p className="text-muted-foreground text-sm flex items-center gap-2 mt-1">
+            <Receipt className="h-4 w-4" /> hospital_bill_fortis.pdf
+          </p>
         </div>
       </div>
 
-      <Alert className={cn("bg-destructive/5 border-destructive/20 text-destructive-foreground", totalOvercharge === 0 && "bg-green-500/5 border-green-500/20 text-green-700")}>
-        <AlertDescription className="flex items-center gap-2">
-          {totalOvercharge > 0 ? (
-            <>
-              <CheckCircle2 className="h-5 w-5 text-destructive" />
-              <span className="font-semibold text-destructive">Significant Overcharges Detected:</span>
-              We found potential savings of ₹{totalOvercharge.toLocaleString()} in your bill based on government benchmarks.
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <span className="font-semibold text-green-600">No Overcharges Detected:</span>
-              Your bill seems to align with government benchmarks.
-            </>
-          )}
+      <Alert variant="destructive" className="mb-8 border-red-200 bg-red-50 text-red-900 shadow-sm dark:bg-red-950/20 dark:border-red-900 dark:text-red-200">
+        <AlertCircle className="h-5 w-5 !text-red-600 dark:!text-red-400" />
+        <AlertTitle className="text-lg font-bold">⚠️ Overcharge Detected</AlertTitle>
+        <AlertDescription className="text-base mt-2">
+          You were overcharged <span className="font-bold underline decoration-red-400 underline-offset-4">₹{totalOvercharge.toLocaleString("en-IN")}</span> ({overchargePercentage}%) compared to standard benchmark rates (CGHS/NPPA).
         </AlertDescription>
       </Alert>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
-        <SummaryCards
-          totalBill={totalBill}
-          totalOvercharge={totalOvercharge}
-          percentageOvercharge={percentageOvercharge}
-        />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="space-y-4"
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-bold">Line Item Breakdown</h3>
-          <p className="text-xs text-muted-foreground italic">* Prices based on CGHS & NPPA benchmarks</p>
-        </div>
-        <BillTable items={items} />
-      </motion.div>
-
-      {legalLetter && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-12"
-        >
-          <Card className="rounded-3xl border-2 border-primary/20 p-8 bg-white shadow-xl">
-            <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              <FileText className="h-6 w-6 text-primary" />
-              Legal Complaint Letter
-            </h3>
-            <div className="bg-muted/30 p-8 rounded-2xl whitespace-pre-wrap font-serif text-lg leading-relaxed text-foreground border border-border">
-              {legalLetter}
-            </div>
-            <div className="mt-6 flex justify-end">
-              <Button onClick={() => {
-                const blob = new Blob([legalLetter], { type: 'text/plain' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'Legal_Complaint_Letter.txt';
-                a.click();
-              }} variant="outline" className="rounded-xl">
-                Download Letter (.txt)
-              </Button>
-            </div>
-          </Card>
-        </motion.div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
-        <Card className="rounded-3xl border-none shadow-sm bg-muted/20 p-8">
-          <h3 className="text-xl font-bold mb-4">Next Steps</h3>
-          <ul className="space-y-4">
-            <li className="flex gap-3">
-              <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs shrink-0 mt-0.5">1</div>
-              <p className="text-sm">Download the detailed legal complaint report generated by our system.</p>
-            </li>
-            <li className="flex gap-3">
-              <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs shrink-0 mt-0.5">2</div>
-              <p className="text-sm">Contact the hospital's billing department and provide them with the report ID.</p>
-            </li>
-            <li className="flex gap-3">
-              <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs shrink-0 mt-0.5">3</div>
-              <p className="text-sm">Request an Itemized Bill and compare it again if discrepancies persist.</p>
-            </li>
-          </ul>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <CardDescription>Total Billed Amount</CardDescription>
+            <CardTitle className="text-2xl">₹{totalCharged.toLocaleString("en-IN")}</CardTitle>
+          </CardHeader>
         </Card>
-        <Card className="rounded-3xl border-none shadow-sm bg-primary/5 p-8 flex flex-col items-center justify-center text-center">
-          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <Share2 className="h-8 w-8 text-primary" />
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <CardDescription>Fair Market Price</CardDescription>
+            <CardTitle className="text-2xl text-green-600">₹{(totalCharged - totalOvercharge).toLocaleString("en-IN")}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="shadow-sm border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/10">
+          <CardHeader className="pb-2">
+            <CardDescription className="text-red-700 dark:text-red-300 font-medium">Overcharge Amount</CardDescription>
+            <CardTitle className="text-2xl text-red-600 dark:text-red-400">₹{totalOvercharge.toLocaleString("en-IN")}</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      <Card className="mb-8 shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/30 border-b">
+          <CardTitle className="text-xl flex items-center gap-2">
+            <FileSearch className="h-5 w-5 text-blue-600" /> Line Item Analysis
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs uppercase bg-muted/50 text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-6 py-4 font-semibold">Item / Description</th>
+                  <th scope="col" className="px-6 py-4 font-semibold text-right">Charged Price</th>
+                  <th scope="col" className="px-6 py-4 font-semibold text-right">Benchmark Price</th>
+                  <th scope="col" className="px-6 py-4 font-semibold text-right">Overcharge</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {mockData.map((row) => (
+                  <tr 
+                    key={row.id} 
+                    className={row.overcharge > 0 ? "bg-red-50/40 dark:bg-red-950/20 hover:bg-red-50 dark:hover:bg-red-900/40 transition-colors" : "hover:bg-muted/50 transition-colors"}
+                  >
+                    <td className="px-6 py-4 font-medium">{row.item}</td>
+                    <td className="px-6 py-4 text-right">₹{row.charged.toLocaleString("en-IN")}</td>
+                    <td className="px-6 py-4 text-right text-green-600 dark:text-green-400">₹{row.benchmark.toLocaleString("en-IN")}</td>
+                    <td className="px-6 py-4 text-right">
+                      {row.overcharge > 0 && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                          +₹{row.overcharge.toLocaleString("en-IN")}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <h3 className="text-xl font-bold mb-2">Need Professional Help?</h3>
-          <p className="text-sm text-muted-foreground mb-6 max-w-xs">
-            Talk to a medical billing advocate who can handle the dispute for you on a contingency basis.
-          </p>
-          <Button variant="secondary" className="rounded-full w-full max-w-[200px]">Consult an Expert</Button>
-        </Card>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t pt-8">
+        <Button variant="outline" className="w-full sm:w-auto">
+          <ArrowDownToLine className="mr-2 h-4 w-4" /> Download Report
+        </Button>
+        <Link 
+          href="/letter" 
+          className={cn(
+            buttonVariants({ size: "lg" }),
+            "w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-all font-semibold rounded-full px-8"
+          )}
+        >
+          Generate Legal Letter <FileText className="ml-2 h-5 w-5" />
+        </Link>
       </div>
     </div>
   )
