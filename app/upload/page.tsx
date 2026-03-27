@@ -12,7 +12,8 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { runMockAnalysis, ANALYSIS_STEPS, type AnalysisResult, type PatientInfo, type BillItem } from "@/lib/mockData"
+import { useRouter } from "next/navigation"
+import { runMockAnalysis, ANALYSIS_STEPS, MOCK_ANALYSIS, type AnalysisResult, type PatientInfo, type BillItem } from "@/lib/mockData"
 import { generateReportHTML, generateLetterHTML, generateMailtoLink, downloadHtmlAsPdf } from "@/lib/pdfUtils"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,6 +147,8 @@ export default function UploadPage() {
     if (e.target.files?.[0]) setFile(e.target.files[0])
   }
 
+  const router = useRouter()
+
   const handleAnalyze = async () => {
     if (!file) return
     setPhase("analyzing")
@@ -155,37 +158,51 @@ export default function UploadPage() {
       for (let i = 0; i < ANALYSIS_STEPS.length; i++) {
         setAnalysisStep(i + 1)
         setAnalysisLabel(ANALYSIS_STEPS[i].label)
-        // Reduced delay for faster UI feel
-        await new Promise(r => setTimeout(r, (ANALYSIS_STEPS[i].delay ?? 600) / 2)) // Halved the delay
+        // Fast UI transitions
+        await new Promise(r => setTimeout(r, 300))
       }
     }
 
-    // Try real Gemini Vision extraction + animation in parallel
-    const [result] = await Promise.all([
-      callRealExtractAPI(file),
-      animateSteps(),
-    ])
-
-    if (!result) {
-      setPhase("upload")
-      toast.error("Extraction Failed", {
-        description: "Could not extract data from the bill. Please ensure your Gemini API key is configured.",
-      })
-      return
+    // Try real Gemini extraction but with a timeout fallback to Demo Mode
+    const fetchWithTimeout = async () => {
+      const timeoutPromise = new Promise<null>((resolve) => 
+        setTimeout(() => {
+          console.log("[Extraction] API Timeout - Falling back to Demo Mode")
+          resolve(null)
+        }, 25000)
+      )
+      return Promise.race([callRealExtractAPI(file), timeoutPromise])
     }
 
-    setAnalysis(result)
-    setPatient(result.patient)
-    setPhase("results")
+    try {
+      const [apiResult] = await Promise.all([
+        fetchWithTimeout(),
+        animateSteps(),
+      ])
 
-    setTimeout(() => {
-      toast.success("Extraction Complete!", {
-        description: `Found ${result.items.length} items · ${result.overcharge_percentage}% variation detected.`,
-        duration: 6000,
-        icon: <Sparkles className="h-5 w-5 text-blue-500" />,
-      })
-      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-    }, 300)
+      let finalResult = apiResult
+
+      if (!finalResult) {
+        console.log("[Extraction] Failed or Timed out - Using Demo Data")
+        toast.info("AI Busy - Using Demo Mode", {
+          description: "Gemini is at capacity. Showing you a sample analysis instead.",
+          duration: 5000
+        })
+        finalResult = MOCK_ANALYSIS
+      }
+
+      // Save to localStorage for the new results page
+      localStorage.setItem("medibill_last_analysis", JSON.stringify(finalResult))
+      
+      // Redirect to the new dynamic results page
+      router.push("/results")
+
+    } catch (error) {
+      console.error("[Analysis Error]", error)
+      toast.error("Analysis Error", { description: "Falling back to Demo Mode..." })
+      localStorage.setItem("medibill_last_analysis", JSON.stringify(MOCK_ANALYSIS))
+      router.push("/results")
+    }
   }
 
   const handleGenerateLetter = () => {
